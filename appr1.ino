@@ -15,8 +15,8 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -3 * 3600;
 const int   daylightOffset_sec = 0;
 
-//Tamanho do buffer limita quantidade de amostras (1s / 8ms = 125 amostras (125Hz))
-#define BUFFER_SIZE 500
+//Tamanho do buffer limita quantidade de amostras (1s / 2ms = 500 amostras (500Hz))
+#define BUFFER_SIZE 2000
 
 short int bufferCore0[BUFFER_SIZE];
 short int bufferCore1[BUFFER_SIZE];
@@ -74,7 +74,7 @@ void taskCore0(void* parameter) {
 
     if (indexCore0 < BUFFER_SIZE) {
       //Descomentar para enviar dados reais
-      int lm358_raw = analogRead(PIN_LM358);
+      short int lm358_raw = analogRead(PIN_LM358);
       portENTER_CRITICAL(&mux);
       //Descomentar para enviar dados reais
       bufferCore0[indexCore0] = lm358_raw;
@@ -85,7 +85,7 @@ void taskCore0(void* parameter) {
     }
 
     //Delay de 5ms
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(pdMS_TO_TICKS(2));
   }
 }
 
@@ -95,7 +95,7 @@ void taskCore1(void* parameter) {
 
     if (indexCore1 < BUFFER_SIZE) {
       //Descomentar para enviar dados reais
-      int sct013_raw = analogRead(PIN_SCT013);
+      short int sct013_raw = analogRead(PIN_SCT013);
       portENTER_CRITICAL(&mux);
       //Descomentar para enviar dados reais
       bufferCore1[indexCore1] = sct013_raw;
@@ -106,7 +106,7 @@ void taskCore1(void* parameter) {
     }
 
     //Delay de 5ms
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(pdMS_TO_TICKS(2));
   }
 }
 
@@ -158,11 +158,11 @@ void taskOrquestrador(void* parameter) {
       http.begin(serverUrl);
       http.addHeader("Content-Type", "application/json");
       int httpResponseCode = http.POST(payload);
-      if (httpResponseCode > 0) {
-        Serial.printf("[HTTP] Sucesso: %d\n", httpResponseCode);
-      } else {
-        Serial.printf("[HTTP] Erro: %s\n", http.errorToString(httpResponseCode).c_str());
-      }
+      // if (httpResponseCode > 0) {
+      //   Serial.printf("[HTTP] Sucesso: %d\n", httpResponseCode);
+      // } else {
+      //   Serial.printf("[HTTP] Erro: %s\n", http.errorToString(httpResponseCode).c_str());
+      // }
       http.end();
     } else {
       Serial.println("WiFi desconectado.");
@@ -198,4 +198,3 @@ void setup() {
 
 void loop() {
 }
-
