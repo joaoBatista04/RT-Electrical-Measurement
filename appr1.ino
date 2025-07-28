@@ -1,12 +1,13 @@
 #include <WiFi.h>
 #include <time.h>
+#include <HTTPClient.h>
 
 #define PIN_SCT013 1
 #define PIN_LM358  2
 
 const char* ssid = "YOUR_SSID";
 const char* password = "YOUR_PASSWORD";
-const char* serverUrl = "http://localhost:5000/data";
+const char* serverUrl = "http://YOUR_IP:8000/rt_energy/upload/";
 #define WIFI_CHANNEL 6
 
 //Sincronizacao com a hora atual (-3 é o horário de Brasília)
@@ -14,18 +15,13 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -3 * 3600;
 const int   daylightOffset_sec = 0;
 
-//Tamanho do buffer esta 200 amostras (1s / 5ms = 200 amostras)
-#define BUFFER_SIZE 200
+//Tamanho do buffer limita quantidade de amostras (1s / 8ms = 125 amostras (125Hz))
+#define BUFFER_SIZE 500
 
-struct Sample {
-  time_t timestamp;  //Timestamp em segundos Unix Epoch
-  float value;
-};
-
-Sample bufferCore0[BUFFER_SIZE];
-Sample bufferCore1[BUFFER_SIZE];
-int indexCore0 = 0;
-int indexCore1 = 0;
+short int bufferCore0[BUFFER_SIZE];
+short int bufferCore1[BUFFER_SIZE];
+short int indexCore0 = 0;
+short int indexCore1 = 0;
 
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 EventGroupHandle_t syncGroup;
@@ -47,20 +43,43 @@ void setupTime() {
   Serial.printf("Hora sincronizada: %02d:%02d:%02d\n", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 }
 
+String getISO8601Timestamp() {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);  // Pega segundos + micros
+
+  struct tm timeinfo;
+  gmtime_r(&tv.tv_sec, &timeinfo);  // UTC
+
+  char buffer[40];
+  int millisec = tv.tv_usec / 1000;
+
+  snprintf(
+    buffer, sizeof(buffer),
+    "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+    timeinfo.tm_year + 1900,
+    timeinfo.tm_mon + 1,
+    timeinfo.tm_mday,
+    timeinfo.tm_hour,
+    timeinfo.tm_min,
+    timeinfo.tm_sec,
+    millisec
+  );
+
+  return String(buffer);
+}
+
 void taskCore0(void* parameter) {
   for (;;) {
     xEventGroupWaitBits(syncGroup, BIT_START, false, true, portMAX_DELAY);
 
     if (indexCore0 < BUFFER_SIZE) {
       //Descomentar para enviar dados reais
-      //int lm358_raw = analogRead(PIN_LM358);
-      time_t ts = time(nullptr);
+      int lm358_raw = analogRead(PIN_LM358);
       portENTER_CRITICAL(&mux);
-      bufferCore0[indexCore0].timestamp = ts;
       //Descomentar para enviar dados reais
-      //bufferCore0[indexCore0].value = lm358_raw;
+      bufferCore0[indexCore0] = lm358_raw;
       //Simulando dados mocados
-      bufferCore0[indexCore0].value = random(0, 30);
+      //bufferCore0[indexCore0].value = random(0, 30);
       indexCore0++;
       portEXIT_CRITICAL(&mux);
     }
@@ -76,14 +95,12 @@ void taskCore1(void* parameter) {
 
     if (indexCore1 < BUFFER_SIZE) {
       //Descomentar para enviar dados reais
-      //int sct013_raw = analogRead(PIN_SCT013);
-      time_t ts = time(nullptr);
+      int sct013_raw = analogRead(PIN_SCT013);
       portENTER_CRITICAL(&mux);
-      bufferCore1[indexCore1].timestamp = ts;
       //Descomentar para enviar dados reais
-      //bufferCore1[indexCore1].value = sct013_raw;
+      bufferCore1[indexCore1] = sct013_raw;
       //Simulando dados mocados
-      bufferCore1[indexCore1].value = random(0, 30);
+      //bufferCore1[indexCore1].value = random(0, 30);
       indexCore1++;
       portEXIT_CRITICAL(&mux);
     }
@@ -100,26 +117,37 @@ void taskOrquestrador(void* parameter) {
     xEventGroupClearBits(syncGroup, BIT_STOP);
     xEventGroupSetBits(syncGroup, BIT_START);
 
-    //Espera medições
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    //Espera medições (4 segundos)
+    vTaskDelay(pdMS_TO_TICKS(4000));
 
     //Desabilita medições
     xEventGroupClearBits(syncGroup, BIT_START);
     xEventGroupSetBits(syncGroup, BIT_STOP);
 
     //Monta o JSON
+    String finalTimestamp = getISO8601Timestamp();
     String payload = "{";
-    payload += "\"tensao\": [";
+
+    // Adiciona o timestamp final em ISO 8601 (UTC), ex: "2025-07-27T17:25:30.123Z"
+    payload += "\"timestamp\":\"" + finalTimestamp + "\",";
+
+    // Lista de valores do core0
+    payload += "\"lm358\":[";
     for (int i = 0; i < indexCore0; ++i) {
-      payload += "{\"timestamp\":" + String(bufferCore0[i].timestamp) + ",\"value\":" + String(bufferCore0[i].value, 1) + "}";
+      payload += String(bufferCore0[i]);
       if (i < indexCore0 - 1) payload += ",";
     }
-    payload += "],\"corrente\": [";
+    payload += "],";
+
+    // Lista de valores do core1
+    payload += "\"sct013\":[";
     for (int i = 0; i < indexCore1; ++i) {
-      payload += "{\"timestamp\":" + String(bufferCore1[i].timestamp) + ",\"value\":" + String(bufferCore1[i].value, 1) + "}";
+      payload += String(bufferCore1[i]);
       if (i < indexCore1 - 1) payload += ",";
     }
-    payload += "]}";
+    payload += "]";
+
+    payload += "}";
 
     //TESTE
     //Serial.println(payload);
