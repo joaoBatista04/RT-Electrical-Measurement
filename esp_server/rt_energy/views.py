@@ -25,7 +25,7 @@ def esp_data_upload(request):
 
         total_samples = max(len(lm358_list), len(sct013_list))
         # interval could also be provided in the request
-        interval = timedelta(milliseconds=8)  # 8 ms interval between samples (120Hz)
+        interval = timedelta(milliseconds=2)  # 2 ms interval between samples (500Hz)
 
         objects = []
 
