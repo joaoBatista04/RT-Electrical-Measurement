@@ -35,72 +35,67 @@ export default function EnergyDashboard() {
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesData[]>([])
   const [fftData, setFFTData] = useState<FFTData[]>([])
   const [rmsValues, setRMSValues] = useState<RMSValuesType>({
-    tensaoRMS: 220.5,
-    correnteRMS: 12.3,
-  })
-  const [predictionData, setPredictionData] = useState({
-    kwh: 125.5,
-    ah: 8.2,
+    tensaoRMS: 0.0,
+    correnteRMS: 0.0
   })
   const [isLoading, setIsLoading] = useState(false)
-  const [isPredictionLoading, setIsPredictionLoading] = useState(false)
   const [isFFTLoading, setIsFFTLoading] = useState(false)
   const [loadResult, setLoadResult] = useState<LoadIdentificationResult | null>(null)
-  const [isDeviceConnected, setIsDeviceConnected] = useState(true)
 
-  const generateFFTData = () => {
-    const data = []
+  async function getFFTData() {
+    try {
+        await fetch("http://localhost:8000/rt_energy/get_fft/").then(async (response) => {
+        if (!response.ok) {
+          console.error("Erro ao buscar dados da FFT")
+        }
+        await response.json().then((data) => {
+          const formatted = data.map((item: any) => ({
+            frequency: item.frequency,
+            amplitude: item.amplitude,
+          }))
 
-    data.push({
-      frequency: 0,
-      amplitude: 0.95,
-    })
-
-    for (let i = 50; i <= 500; i += 50) {
-      data.push({
-        frequency: i,
-        amplitude: Math.max(0.1, 0.8 - i / 1000),
+          return formatted
+        })
       })
+    } catch (error) {
+      console.error("Erro no getFFTData:", error)
+      return [];
     }
-
-    data.push({
-      frequency: 1000,
-      amplitude: 0.35,
-    })
-
-    for (let i = 1500; i <= 25000; i += 1000) {
-      data.push({
-        frequency: i,
-        amplitude: Math.random() * 0.1 + 0.05,
-      })
-    }
-
-    return data
   }
 
-  const updateRMSValues = () => {
-    setRMSValues({
-      tensaoRMS: Number((Math.random() * 20 + 210).toFixed(1)),
-      correnteRMS: Number((Math.random() * 10 + 8).toFixed(1)),
+  const updateRMSValues = async () => {
+    fetch("http://localhost:8000/rt_energy/latest_rms/").then(async (response) => {
+      if (!response.ok) {
+        console.error("Erro ao buscar valores RMS")
+        return
+      }
+      const data = await response.json()
+      setRMSValues({
+        tensaoRMS: data.v_rms.toFixed(1),
+        correnteRMS: data.i_rms.toFixed(1),
+      })
     })
   }
 
   const fetchTimeSeriesData = async () => {
-    setIsLoading(true)
     try {
-      const simulatedData = Array.from({ length: 24 }, (_, i) => ({
-        timestamp: `${String(i).padStart(2, "0")}:00`,
-        tensao: Math.floor(Math.random() * 50) + 200,
-        corrente: Math.floor(Math.random() * 20) + 5,
-      }))
+      await fetch("http://localhost:8000/rt_energy/latest_batch/").then(async (response) => {
+        if (!response.ok) {
+          console.error("Erro ao buscar dados da série temporal")
+          return
+        }
 
-      setTimeSeriesData(simulatedData)
-      setFFTData(generateFFTData())
-      updateRMSValues()
+        const data = await response.json()
+        const formattedData = data.map((item: any) => ({
+          timestamp: item.timestamp,
+          tensao: item.voltage.toFixed(1),
+          corrente: item.current.toFixed(1),
+        }))
+
+        setTimeSeriesData(formattedData)
+      })
     } catch (error) {
       console.error("Erro ao buscar dados:", error)
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -124,30 +119,11 @@ export default function EnergyDashboard() {
     }
   }
 
-  const handleUpdatePrediction = async () => {
-    setIsPredictionLoading(true)
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const newKwh = Math.floor(Math.random() * 100) + 80 + Math.random() * 50
-      const newAh = Math.floor(Math.random() * 10) + 5 + Math.random() * 5
-
-      setPredictionData({
-        kwh: Number(newKwh.toFixed(1)),
-        ah: Number(newAh.toFixed(1)),
-      })
-    } catch (error) {
-      console.error("Erro ao atualizar predição:", error)
-    } finally {
-      setIsPredictionLoading(false)
-    }
-  }
-
   const handleUpdateFFT = async () => {
     setIsFFTLoading(true)
     try {
       await new Promise((resolve) => setTimeout(resolve, 1500))
-      setFFTData(generateFFTData())
+      setFFTData(getFFTData())
     } catch (error) {
       console.error("Erro ao atualizar FFT:", error)
     } finally {
@@ -157,16 +133,12 @@ export default function EnergyDashboard() {
 
   useEffect(() => {
     fetchTimeSeriesData()
-    const interval = setInterval(fetchTimeSeriesData, 30000)
+    const interval = setInterval(fetchTimeSeriesData, 8000)
     const rmsInterval = setInterval(updateRMSValues, 5000)
-    const connectionInterval = setInterval(() => {
-      setIsDeviceConnected((prev) => (Math.random() > 0.1 ? true : !prev))
-    }, 10000)
 
     return () => {
       clearInterval(interval)
       clearInterval(rmsInterval)
-      clearInterval(connectionInterval)
     }
   }, [])
 
@@ -178,7 +150,6 @@ export default function EnergyDashboard() {
             <Zap className="h-8 w-8 text-primary" />
             <h1 className="text-3xl font-bold text-foreground">Painel de Controle de Energia</h1>
           </div>
-          <ConnectionStatus isConnected={isDeviceConnected} />
         </div>
 
         <RMSValues values={rmsValues} />
@@ -200,9 +171,7 @@ export default function EnergyDashboard() {
           <LoadIdentification result={loadResult} onIdentify={handleIdentifyLoad} isLoading={isLoading} />
         </div>
 
-        <FFTChart data={fftData} onUpdate={handleUpdateFFT} isLoading={isFFTLoading} />
-
-        <PredictionTable data={predictionData} onUpdate={handleUpdatePrediction} isLoading={isPredictionLoading} />
+        {/* <FFTChart data={fftData} onUpdate={handleUpdateFFT} isLoading={isFFTLoading} /> */}
       </div>
     </div>
   )

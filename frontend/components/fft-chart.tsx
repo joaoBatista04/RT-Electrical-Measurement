@@ -16,7 +16,7 @@ interface FFTChartProps {
   isLoading: boolean
 }
 
-export function FFTChart({ data, onUpdate, isLoading }: FFTChartProps) {
+export function FFTChart({ data = [], onUpdate, isLoading }: FFTChartProps) {
   const formatFrequency = (value: number) => {
     if (value >= 1000) {
       return `${(value / 1000).toFixed(0)}k`
@@ -36,7 +36,9 @@ export function FFTChart({ data, onUpdate, isLoading }: FFTChartProps) {
             </div>
           </div>
           <Button
-            onClick={onUpdate}
+            onClick={async () => {
+              await onUpdate()
+            }}
             disabled={isLoading}
             variant="outline"
             size="sm"

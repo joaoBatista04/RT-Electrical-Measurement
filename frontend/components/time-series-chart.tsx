@@ -32,14 +32,7 @@ export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
           ]}
         />
         <Legend />
-        <Line
-          yAxisId="left"
-          type="monotone"
-          dataKey="tensao"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2}
-          name="Tensão"
-        />
+        <Line yAxisId="left" type="monotone" dataKey="tensao" stroke="#3b82f6" strokeWidth={2} name="Tensão" />
         <Line yAxisId="right" type="monotone" dataKey="corrente" stroke="#ef4444" strokeWidth={2} name="Corrente" />
       </LineChart>
     </ResponsiveContainer>
