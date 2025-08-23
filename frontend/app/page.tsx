@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Zap, Activity } from "lucide-react"
+import { Zap, Activity, ChartLine } from "lucide-react"
 import { TimeSeriesChart } from "@/components/time-series-chart"
 import { FFTChart } from "@/components/fft-chart"
 import { LoadIdentification } from "@/components/load-identification"
@@ -29,6 +29,7 @@ interface LoadIdentificationResult {
 interface RMSValuesType {
   tensaoRMS: number
   correnteRMS: number
+  potenciaRMS: number
 }
 
 export default function EnergyDashboard() {
@@ -36,7 +37,8 @@ export default function EnergyDashboard() {
   const [fftData, setFFTData] = useState<FFTData[]>([])
   const [rmsValues, setRMSValues] = useState<RMSValuesType>({
     tensaoRMS: 0.0,
-    correnteRMS: 0.0
+    correnteRMS: 0.0,
+    potenciaRMS: 0.0
   })
   const [isLoading, setIsLoading] = useState(false)
   const [isFFTLoading, setIsFFTLoading] = useState(false)
@@ -44,19 +46,17 @@ export default function EnergyDashboard() {
 
   async function getFFTData() {
     try {
-        await fetch("http://localhost:8000/rt_energy/get_fft/").then(async (response) => {
-        if (!response.ok) {
-          console.error("Erro ao buscar dados da FFT")
-        }
-        await response.json().then((data) => {
-          const formatted = data.map((item: any) => ({
-            frequency: item.frequency,
-            amplitude: item.amplitude,
-          }))
+      const response = await fetch("http://localhost:8000/rt_energy/get_fft/")
+      if (!response.ok) {
+        console.error("Erro ao buscar dados da FFT")
+      }
+      const data = await response.json()
+      const formatted = data.map((item: any) => ({
+        frequency: item.frequency,
+        amplitude: item.amplitude,
+      }))
 
-          return formatted
-        })
-      })
+      return formatted
     } catch (error) {
       console.error("Erro no getFFTData:", error)
       return [];
@@ -73,6 +73,7 @@ export default function EnergyDashboard() {
       setRMSValues({
         tensaoRMS: data.v_rms.toFixed(1),
         correnteRMS: data.i_rms.toFixed(1),
+        potenciaRMS: data.w_rms.toFixed(1),
       })
     })
   }
@@ -122,8 +123,8 @@ export default function EnergyDashboard() {
   const handleUpdateFFT = async () => {
     setIsFFTLoading(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-      setFFTData(getFFTData())
+      const fft = await getFFTData()
+      setFFTData(fft)
     } catch (error) {
       console.error("Erro ao atualizar FFT:", error)
     } finally {
@@ -158,7 +159,7 @@ export default function EnergyDashboard() {
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
+                <ChartLine className="h-5 w-5" />
                 Monitoramento de Tensão e Corrente
               </CardTitle>
               <CardDescription>Série temporal de tensão (V) e corrente (A) em tempo real</CardDescription>
@@ -168,10 +169,10 @@ export default function EnergyDashboard() {
             </CardContent>
           </Card>
 
-          <LoadIdentification result={loadResult} onIdentify={handleIdentifyLoad} isLoading={isLoading} />
+          <LoadIdentification result={loadResult} onIdentify={handleUpdateFFT} isLoading={isLoading} />
         </div>
 
-        {/* <FFTChart data={fftData} onUpdate={handleUpdateFFT} isLoading={isFFTLoading} /> */}
+        <FFTChart data={fftData} onUpdate={handleUpdateFFT} isLoading={isFFTLoading} />
       </div>
     </div>
   )

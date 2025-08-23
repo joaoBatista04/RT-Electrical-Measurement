@@ -14,6 +14,7 @@ class RMSMeasurement(models.Model):
     timestamp = models.DateTimeField(auto_now_add=False)
     v_rms = models.FloatField(null=True, blank=True)
     i_rms = models.FloatField(null=True, blank=True)
+    w_rms = models.FloatField(null=True, blank=True)
 
     def __str__(self):
         return f"RMS Measurement at {self.timestamp} - V_RMS: {self.v_rms}, I_RMS: {self.i_rms}"

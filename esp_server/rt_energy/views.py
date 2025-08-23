@@ -19,6 +19,22 @@ def process_esp_async(data):
     if not final_ts or not isinstance(lm358_list, list) or not isinstance(sct013_list, list):
         raise ValueError("Invalid data format")
 
+    # Converting ADC Value to real voltage/current
+    ADC_BITS = 12
+    VREF = 3.1
+    RBURDEN = 33.0
+    CT_RATIO = 2000.0
+    K_V = 635.0 # Voltage scaling factor
+
+    scale = VREF / ((1 << ADC_BITS) - 1)
+    sct013_list = [v * scale for v in sct013_list]
+    sct013_mean = sum(sct013_list) / len(sct013_list)
+    sct013_list = [(v - sct013_mean) * CT_RATIO / RBURDEN for v in sct013_list]  # Remove DC component
+
+    lm358_list = [v * scale for v in lm358_list]
+    lm358_mean = sum(lm358_list) / len(lm358_list)
+    lm358_list = [(v - lm358_mean) * K_V for v in lm358_list]  # Remove DC component
+
     final_ts = datetime.fromisoformat(final_ts.replace('Z', '+00:00'))
 
     total_samples = max(len(lm358_list), len(sct013_list))
@@ -26,7 +42,7 @@ def process_esp_async(data):
     interval = timedelta(milliseconds=2)  # 2 ms interval between samples (500Hz)
     
     # Voltage is always sinusoidal, so we can use the simplified RMS formula
-    v_rms = max(lm358_list) / (2 ** 0.5) if lm358_list else None
+    v_rms = max(lm358_list) * 0.707 if lm358_list else None
 
     # Current can be non-sinusoidal, so we calculate the RMS value normally
     if sct013_list:
@@ -38,7 +54,7 @@ def process_esp_async(data):
 
     # Save RMSMeasurement 
 
-    RMSMeasurement.objects.create(timestamp=final_ts, v_rms=v_rms, i_rms=i_rms)
+    RMSMeasurement.objects.create(timestamp=final_ts, v_rms=v_rms, i_rms=i_rms, w_rms=(v_rms * i_rms) if v_rms and i_rms else None)
 
     # --- Gerenciar lotes ---
     # Descobrir último batch_id usado
@@ -89,8 +105,9 @@ def get_latest_measurements(request):
     """
     try:
         latest_batch = EnergyMeasurement.objects.aggregate(Max("batch_id"))["batch_id__max"]
-        measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')[100:150]
+        measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')[100:200]
         serializer = EnergyMeasurementSerializer(measurements, many=True)
+
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -143,4 +160,4 @@ def get_fft(request):
 
     except Exception as e:
         print(e)
-        Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
