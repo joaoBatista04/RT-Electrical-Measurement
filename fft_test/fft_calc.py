@@ -74,6 +74,7 @@ def compute_phase_at_fundamental(V_fft, I_fft, freqs, f0=60.0):
     elif phase_diff_deg < -90:
         phase_diff_deg += 180
 
+    #Identificação do tipo da carga com base na defasagem
     if(phase_diff_deg > 5):
         load_type = 'Capacitiva'
     elif(phase_diff_deg < -5):
