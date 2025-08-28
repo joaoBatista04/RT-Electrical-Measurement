@@ -6,7 +6,7 @@ import { Zap } from "lucide-react"
 
 interface LoadIdentificationResult {
   type: "resistiva" | "indutiva" | "capacitiva"
-  confidence: number
+  phase_angle: number
 }
 
 interface LoadIdentificationProps {
@@ -47,7 +47,7 @@ export function LoadIdentification({ result, onIdentify, isLoading }: LoadIdenti
                 >
                   Carga {result.type.charAt(0).toUpperCase() + result.type.slice(1)}
                 </div>
-                <p className="text-xs text-muted-foreground">Confiança: {result.confidence}%</p>
+                <p className="text-xs text-muted-foreground">Defasagem: {result.phase_angle}°</p>
               </div>
             </div>
           ) : (

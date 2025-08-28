@@ -3,13 +3,16 @@ from django.db.models import Max
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import EnergyMeasurement, RMSMeasurement
-from .serializers import EnergyMeasurementSerializer, RMSMeasurementSerializer
+from .models import EnergyMeasurement, RMSMeasurement, LastFFT
+from .serializers import EnergyMeasurementSerializer, RMSMeasurementSerializer, LastFFTSerializer
 
 from datetime import datetime, timedelta
 
 import threading
 import numpy as np
+import pandas as pd
+from scipy.signal import butter, filtfilt, detrend
+from scipy.interpolate import interp1d
 
 def process_esp_async(data):
     final_ts = data.get('timestamp')
@@ -21,15 +24,15 @@ def process_esp_async(data):
 
     # Converting ADC Value to real voltage/current
     ADC_BITS = 12
-    VREF = 3.1
+    VREF = 3.3
     RBURDEN = 33.0
     CT_RATIO = 2000.0
     K_V = 635.0 # Voltage scaling factor
 
-    scale = VREF / ((1 << ADC_BITS) - 1)
+    scale = VREF / ((1 << ADC_BITS))
     sct013_list = [v * scale for v in sct013_list]
     sct013_mean = sum(sct013_list) / len(sct013_list)
-    sct013_list = [(v - sct013_mean) * CT_RATIO / RBURDEN for v in sct013_list]  # Remove DC component
+    sct013_list = [(v - sct013_mean) * CT_RATIO / (RBURDEN * 5) for v in sct013_list]  # Remove DC component
 
     lm358_list = [v * scale for v in lm358_list]
     lm358_mean = sum(lm358_list) / len(lm358_list)
@@ -42,7 +45,12 @@ def process_esp_async(data):
     interval = timedelta(milliseconds=2)  # 2 ms interval between samples (500Hz)
     
     # Voltage is always sinusoidal, so we can use the simplified RMS formula
-    v_rms = max(lm358_list) * 0.707 if lm358_list else None
+    if lm358_list:
+        squared_sum = sum(i ** 2 for i in lm358_list if i is not None)
+        count = sum(1 for i in lm358_list if i is not None)
+        v_rms = (squared_sum / count) ** 0.5 if count > 0 else None
+    else:
+        v_rms = None
 
     # Current can be non-sinusoidal, so we calculate the RMS value normally
     if sct013_list:
@@ -105,7 +113,7 @@ def get_latest_measurements(request):
     """
     try:
         latest_batch = EnergyMeasurement.objects.aggregate(Max("batch_id"))["batch_id__max"]
-        measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')[100:200]
+        measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')[150:200]
         serializer = EnergyMeasurementSerializer(measurements, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -131,33 +139,92 @@ def get_fft(request):
     Frequencies - Amplitudes - Shift
     """
     try:
+        cutoff_hp = 60.0
+        order = 4
+        f0 = 60
+
         latest_batch = EnergyMeasurement.objects.aggregate(Max("batch_id"))["batch_id__max"]
         # Get subset of measurements for better performance
+        # Remove some samples from start and end due to inconsistencies with the sensors
         measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')
 
-        voltages = [m.voltage for m in measurements if m.voltage is not None]
-        currents = [m.current for m in measurements if m.current is not None]
+        df = pd.DataFrame(list(measurements.values('timestamp', 'voltage', 'current')))
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['current'] = df['current'].fillna(0)
+        df['voltage'] = df['voltage'].fillna(0)
 
-        fs = 500  # Sample frequency (500Hz)
+        #Cálculo do tempo de medição e frequência
+        t = (df['timestamp'] - df['timestamp'].iloc[0]).dt.total_seconds().values
+        N = len(t)
+        dt = np.mean(np.diff(t))
+        fs = 1 / dt
 
-        # FFT
-        fft_v = np.fft.fft(voltages)
-        fft_i = np.fft.fft(currents)
+        #Interpolação para garantir uniformidade
+        t_uniform = np.linspace(t[0], t[-1], N)
+        voltage = interp1d(t, df['voltage'].astype(float), kind='linear')(t_uniform)
+        current = interp1d(t, df['current'].astype(float), kind='linear')(t_uniform)
 
-        freqs = np.fft.fftfreq(len(currents), d=1/fs)
+        #Remoção do componente DC (REMOVER ?)
+        #voltage = detrend(voltage, type='constant')
+        #current = detrend(current, type='constant')
 
-        # Get only positive frequencies
-        pos_mask = freqs > 0
-        freqs = freqs[pos_mask]
-        fft_v = np.abs(fft_v[pos_mask])
-        fft_i = np.abs(fft_i[pos_mask])
+        #Filtro passa-altas para eliminar componentes abaixo da frequência de cutoff definida
+        nyq = fs / 2
+        Wn = cutoff_hp / nyq
+        b, a = butter(order, Wn, btype='high')
+        voltage_filt = filtfilt(b, a, voltage)
+        current_filt = filtfilt(b, a, current)
+
+        #Normalização da corrente em relação à tensão (DESCOMENTAR CASO QUEIRA NORMALIZAR)
+        current_filt = current_filt * (np.max(np.abs(voltage_filt)) / np.max(np.abs(current_filt)))
+
+        #Cálculo da FFT
+        fft_v = np.fft.fft(voltage_filt)
+        fft_i = np.fft.fft(current_filt)
+        freqs = np.fft.fftfreq(N, d=1/fs)
+
+        #Obtenção do ângulo de defasagem na frequência fundamental
+        idx = np.argmin(np.abs(freqs - f0))
+        phase_v = np.angle(fft_v[idx])
+        phase_i = np.angle(fft_i[idx])
+        phase_diff_rad = (phase_i - phase_v + np.pi) % (2*np.pi) - np.pi
+        phase_diff_deg = np.degrees(phase_diff_rad)
+
+        #Normalização do ângulo
+        phase_diff_deg = (phase_diff_deg + 180) % 360 - 180
+        if phase_diff_deg > 90:
+            phase_diff_deg -= 180
+        elif phase_diff_deg < -90:
+            phase_diff_deg += 180
 
         response = [
-            {"frequency": freqs[i], "amplitude": fft_i[i]} for i in range(len(freqs))
+            {"frequency": freqs[i], "amplitude": abs(fft_i[i]) if fft_i[i] else 0} for i in range(len(freqs)) if freqs[i] > 50 and freqs[i] % 5 == 0
         ]
 
+        LastFFT.objects.all().delete()
+        LastFFT.objects.create(data=response, phase_diff_deg=phase_diff_deg)
+
+        print(phase_diff_deg)
         return Response(response, status=status.HTTP_200_OK)
 
     except Exception as e:
         print(e)
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+def get_phase_angle(request):
+    """
+    Retrieve the phase angle between voltage and current.
+    """
+    try:
+        last_fft = LastFFT.objects.latest("id")
+
+        load_type = "Resistiva"
+        if last_fft.phase_diff_deg > 20:
+            load_type = "Indutiva"
+        elif last_fft.phase_diff_deg < -20:
+            load_type = "Capacitiva"
+
+        return Response({"phase_angle": last_fft.phase_diff_deg, "type": load_type}, status=status.HTTP_200_OK)
+    except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -17,12 +17,12 @@ export function TimeSeriesChart({ data }: TimeSeriesChartProps) {
     <ResponsiveContainer width="100%" height={400}>
       <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="timestamp" />
-        <YAxis yAxisId="left" domain={[180, 270]} label={{ value: "Tensão (V)", angle: -90, position: "insideLeft" }} />
+        <XAxis dataKey="timestamp" hide={true} />
+        <YAxis yAxisId="left" domain={[-240, 240]} label={{ value: "Tensão (V)", angle: -90, position: "insideLeft" }} />
         <YAxis
           yAxisId="right"
           orientation="right"
-          domain={[0, 30]}
+          domain={[-10, 10]}
           label={{ value: "Corrente (A)", angle: 90, position: "insideRight" }}
         />
         <Tooltip />

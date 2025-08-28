@@ -23,7 +23,7 @@ interface FFTData {
 
 interface LoadIdentificationResult {
   type: "resistiva" | "indutiva" | "capacitiva"
-  confidence: number
+  phase_angle: number
 }
 
 interface RMSValuesType {
@@ -103,15 +103,18 @@ export default function EnergyDashboard() {
   const handleIdentifyLoad = async () => {
     setIsLoading(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await handleUpdateFFT()
 
-      const loadTypes: ("resistiva" | "indutiva" | "capacitiva")[] = ["resistiva", "indutiva", "capacitiva"]
-      const randomType = loadTypes[Math.floor(Math.random() * loadTypes.length)]
-      const confidence = Math.floor(Math.random() * 20) + 80
+      const response = await fetch("http://localhost:8000/rt_energy/get_phase_angle/")
+      if (!response.ok) {
+        console.error("Erro ao buscar dados da FFT")
+      }
+      const data = await response.json()
+      const phaseAngle = data.phase_angle.toFixed(1)
 
       setLoadResult({
-        type: randomType,
-        confidence,
+        type: data.type,
+        phase_angle: phaseAngle,
       })
     } catch (error) {
       console.error("Erro ao identificar carga:", error)
@@ -136,10 +139,12 @@ export default function EnergyDashboard() {
     fetchTimeSeriesData()
     const interval = setInterval(fetchTimeSeriesData, 8000)
     const rmsInterval = setInterval(updateRMSValues, 5000)
+    const fftInterval = setInterval(handleUpdateFFT, 30000) // Atualiza a FFT a cada 30 segundos
 
     return () => {
       clearInterval(interval)
       clearInterval(rmsInterval)
+      clearInterval(fftInterval)
     }
   }, [])
 
@@ -169,7 +174,7 @@ export default function EnergyDashboard() {
             </CardContent>
           </Card>
 
-          <LoadIdentification result={loadResult} onIdentify={handleUpdateFFT} isLoading={isLoading} />
+          <LoadIdentification result={loadResult} onIdentify={handleIdentifyLoad} isLoading={isLoading} />
         </div>
 
         <FFTChart data={fftData} onUpdate={handleUpdateFFT} isLoading={isFFTLoading} />

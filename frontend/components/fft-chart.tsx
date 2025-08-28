@@ -58,7 +58,7 @@ export function FFTChart({ data = [], onUpdate, isLoading }: FFTChartProps) {
               tickFormatter={formatFrequency}
               label={{ value: "Frequencial[Hz]", position: "insideBottom", offset: -10 }}
             />
-            <YAxis domain={[0, 1]} label={{ value: "Amplitude[dB]", angle: -90, position: "insideLeft" }} />
+            <YAxis domain={[0, 1]} label={{ value: "Amplitude[dB]", angle: -90, position: "insideLeft" }} hide={true} />
             <Tooltip
               formatter={(value: number) => [`${value.toFixed(3)} dB`, "Amplitude"]}
               labelFormatter={(label: number) => `Frequência: ${formatFrequency(label)}Hz`}
