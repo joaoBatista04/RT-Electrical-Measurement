@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.db.models import Max
+from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -113,7 +114,7 @@ def get_latest_measurements(request):
     """
     try:
         latest_batch = EnergyMeasurement.objects.aggregate(Max("batch_id"))["batch_id__max"]
-        measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')[150:200]
+        measurements = EnergyMeasurement.objects.filter(batch_id=latest_batch).order_by('timestamp')[700:750]
         serializer = EnergyMeasurementSerializer(measurements, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -127,8 +128,42 @@ def get_latest_rms(request):
     """
     try:
         latest_rms = RMSMeasurement.objects.latest("timestamp")
+
+        # Recuperar todas as medições da última hora
+        agora = timezone.now()
+        uma_hora_atras = agora - timedelta(hours=1)
+        medidas = RMSMeasurement.objects.filter(timestamp__gte=uma_hora_atras).order_by("timestamp")
+
+        energia_Wh = 0.0
+
+        if medidas.exists():
+            for i in range(len(medidas) - 1):
+                m1 = medidas[i]
+                m2 = medidas[i + 1]
+
+                # Tempo entre medições em segundos
+                delta_t = (m2.timestamp - m1.timestamp).total_seconds()
+
+                # Potência média nesse intervalo (em Watts)
+                p_med = m1.w_rms if m1.w_rms else 0
+
+                # Energia acumulada (Wh)
+                energia_Wh += p_med * (delta_t / 3600.0)
+
+            # Considerar o último ponto até "agora"
+            ultimo = medidas.last()
+            delta_t = (agora - ultimo.timestamp).total_seconds()
+            if ultimo.w_rms:
+                energia_Wh += ultimo.w_rms * (delta_t / 3600.0)
+
+        # Serializar última medição
         serializer = RMSMeasurementSerializer(latest_rms)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Adicionar a estimativa de energia na response
+        response_data = serializer.data
+        response_data["energy_hour"] = round(energia_Wh, 3)
+
+        return Response(response_data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

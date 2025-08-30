@@ -7,6 +7,7 @@ interface RMSValues {
   tensaoRMS: number
   correnteRMS: number
   potenciaRMS: number
+  energiaHora: number
 }
 
 interface RMSValuesProps {
@@ -15,7 +16,22 @@ interface RMSValuesProps {
 
 export function RMSValues({ values }: RMSValuesProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-red-500" />
+            Consumo na última hora
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center">
+            <div className="text-4xl font-bold text-red-600 dark:text-red-400">{values.energiaHora}</div>
+            <div className="text-lg text-muted-foreground">Wh</div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -27,20 +43,6 @@ export function RMSValues({ values }: RMSValuesProps) {
           <div className="text-center">
             <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{values.potenciaRMS}</div>
             <div className="text-lg text-muted-foreground">W</div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-blue-500" />
-            Tensão RMS
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{values.tensaoRMS}</div>
-            <div className="text-lg text-muted-foreground">V</div>
           </div>
         </CardContent>
       </Card>
@@ -56,6 +58,21 @@ export function RMSValues({ values }: RMSValuesProps) {
           <div className="text-center">
             <div className="text-4xl font-bold text-red-600 dark:text-red-400">{values.correnteRMS}</div>
             <div className="text-lg text-muted-foreground">A</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-blue-500" />
+            Tensão RMS
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center">
+            <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{values.tensaoRMS}</div>
+            <div className="text-lg text-muted-foreground">V</div>
           </div>
         </CardContent>
       </Card>

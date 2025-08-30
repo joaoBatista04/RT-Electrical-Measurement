@@ -32,7 +32,7 @@ export function FFTChart({ data = [], onUpdate, isLoading }: FFTChartProps) {
             <BarChart3 className="h-5 w-5" />
             <div>
               <CardTitle>Domínio Frequência</CardTitle>
-              <CardDescription>Análise FFT - Espectro de frequência da tensão e corrente</CardDescription>
+              <CardDescription>Análise FFT - Espectro de frequência da corrente</CardDescription>
             </div>
           </div>
           <Button

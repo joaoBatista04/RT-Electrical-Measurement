@@ -30,6 +30,7 @@ interface RMSValuesType {
   tensaoRMS: number
   correnteRMS: number
   potenciaRMS: number
+  energiaHora: number
 }
 
 export default function EnergyDashboard() {
@@ -38,7 +39,8 @@ export default function EnergyDashboard() {
   const [rmsValues, setRMSValues] = useState<RMSValuesType>({
     tensaoRMS: 0.0,
     correnteRMS: 0.0,
-    potenciaRMS: 0.0
+    potenciaRMS: 0.0,
+    energiaHora: 0.0
   })
   const [isLoading, setIsLoading] = useState(false)
   const [isFFTLoading, setIsFFTLoading] = useState(false)
@@ -74,6 +76,7 @@ export default function EnergyDashboard() {
         tensaoRMS: data.v_rms.toFixed(1),
         correnteRMS: data.i_rms.toFixed(1),
         potenciaRMS: data.w_rms.toFixed(1),
+        energiaHora: data.energy_hour.toFixed(1)
       })
     })
   }
