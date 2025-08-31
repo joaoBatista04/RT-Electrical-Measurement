@@ -9,11 +9,16 @@ const char* ssid = "YOUR_SSID";
 const char* password = "YOUR_PASSWORD";
 const char* serverUrl = "http://YOUR_IP:8000/rt_energy/upload/";
 #define WIFI_CHANNEL 6
+HTTPClient http;
+int httpResponseCode;
 
 //Sincronizacao com a hora atual (-3 é o horário de Brasília)
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = -3 * 3600;
 const int   daylightOffset_sec = 0;
+
+String finalTimestamp;
+String payload;
 
 //Tamanho do buffer limita quantidade de amostras (1s / 2ms = 500 amostras (500Hz))
 #define BUFFER_SIZE 2000
@@ -22,36 +27,40 @@ short int bufferCore0[BUFFER_SIZE];
 short int bufferCore1[BUFFER_SIZE];
 short int indexCore0 = 0;
 short int indexCore1 = 0;
+short int lm358_raw;
+short int sct013_raw;
 
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 EventGroupHandle_t syncGroup;
 #define BIT_START  BIT0
 #define BIT_STOP   BIT1
 
+time_t now;
+struct tm timeinfo;
 void setupTime() {
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   Serial.print("Sincronizando hora via NTP");
-  time_t now = time(nullptr);
+  now = time(nullptr);
   while (now < 8 * 3600 * 2) {
     delay(500);
     Serial.print(".");
     now = time(nullptr);
   }
   Serial.println();
-  struct tm timeinfo;
   localtime_r(&now, &timeinfo);
   Serial.printf("Hora sincronizada: %02d:%02d:%02d\n", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 }
 
+struct timeval tv;
+char buffer[40];
+int millisec;
 String getISO8601Timestamp() {
-  struct timeval tv;
+  
   gettimeofday(&tv, nullptr);  // Pega segundos + micros
 
-  struct tm timeinfo;
   gmtime_r(&tv.tv_sec, &timeinfo);  // UTC
 
-  char buffer[40];
-  int millisec = tv.tv_usec / 1000;
+  millisec = tv.tv_usec / 1000;
 
   snprintf(
     buffer, sizeof(buffer),
@@ -74,7 +83,7 @@ void taskCore0(void* parameter) {
 
     if (indexCore0 < BUFFER_SIZE) {
       //Descomentar para enviar dados reais
-      short int lm358_raw = analogRead(PIN_LM358);
+      lm358_raw = analogRead(PIN_LM358);
       portENTER_CRITICAL(&mux);
       //Descomentar para enviar dados reais
       bufferCore0[indexCore0] = lm358_raw;
@@ -84,7 +93,7 @@ void taskCore0(void* parameter) {
       portEXIT_CRITICAL(&mux);
     }
 
-    //Delay de 5ms
+    //Delay de 2ms
     vTaskDelay(pdMS_TO_TICKS(2));
   }
 }
@@ -95,7 +104,7 @@ void taskCore1(void* parameter) {
 
     if (indexCore1 < BUFFER_SIZE) {
       //Descomentar para enviar dados reais
-      short int sct013_raw = analogRead(PIN_SCT013);
+      sct013_raw = analogRead(PIN_SCT013);
       portENTER_CRITICAL(&mux);
       //Descomentar para enviar dados reais
       bufferCore1[indexCore1] = sct013_raw;
@@ -105,7 +114,7 @@ void taskCore1(void* parameter) {
       portEXIT_CRITICAL(&mux);
     }
 
-    //Delay de 5ms
+    //Delay de 2ms
     vTaskDelay(pdMS_TO_TICKS(2));
   }
 }
@@ -117,7 +126,7 @@ void taskOrquestrador(void* parameter) {
     xEventGroupClearBits(syncGroup, BIT_STOP);
     xEventGroupSetBits(syncGroup, BIT_START);
 
-    //Espera medições (4 segundos)
+    //Espera medições (2 segundos)
     vTaskDelay(pdMS_TO_TICKS(4000));
 
     //Desabilita medições
@@ -125,8 +134,8 @@ void taskOrquestrador(void* parameter) {
     xEventGroupSetBits(syncGroup, BIT_STOP);
 
     //Monta o JSON
-    String finalTimestamp = getISO8601Timestamp();
-    String payload = "{";
+    finalTimestamp = getISO8601Timestamp();
+    payload = "{";
 
     // Adiciona o timestamp final em ISO 8601 (UTC), ex: "2025-07-27T17:25:30.123Z"
     payload += "\"timestamp\":\"" + finalTimestamp + "\",";
@@ -154,16 +163,16 @@ void taskOrquestrador(void* parameter) {
 
     //Envio HTTP para servidor externo
     if (WiFi.status() == WL_CONNECTED) {
-      HTTPClient http;
       http.begin(serverUrl);
       http.addHeader("Content-Type", "application/json");
-      int httpResponseCode = http.POST(payload);
+      httpResponseCode = http.POST(payload);
       // if (httpResponseCode > 0) {
       //   Serial.printf("[HTTP] Sucesso: %d\n", httpResponseCode);
       // } else {
       //   Serial.printf("[HTTP] Erro: %s\n", http.errorToString(httpResponseCode).c_str());
       // }
       http.end();
+      Serial.println("Enviou http");
     } else {
       Serial.println("WiFi desconectado.");
     }
@@ -184,6 +193,9 @@ void setup() {
   }
   Serial.println("\nWi-Fi conectado!");
   Serial.println(WiFi.localIP());
+
+  http.setConnectTimeout(2000); // Set http connect timeout to 2 seconds   
+  http.setTimeout(5000);        // Set http timeout to 5 seconds
 
   //Sincronização de tempo
   setupTime();
