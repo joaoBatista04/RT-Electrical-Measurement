@@ -10,6 +10,8 @@ This project presents the development of a smart energy meter for real-time elec
 
 The system was designed to be robust, low-cost, and adaptable, integrating IoT, digital signal processing, and spectral analysis. It features a web-based frontend, a backend server, and ESP-based firmware.
 
+This project was developed as part of the [Integrated Computer Project II](https://computacao-ufes.github.io/mostra/pic2_EC_20251.html) course at the Federal University of Espírito Santo (UFES)
+
 ## ✅ Features
 
 - Real-time electrical parameter monitoring (voltage, current, etc.)
