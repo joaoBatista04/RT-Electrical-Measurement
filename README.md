@@ -106,7 +106,7 @@ frontend/
 
 ## 📄 Demonstration and Technical Documentation
 
-For a real demonstration of how the project works, watch the video at this [link](https://www.youtube.com/watch?v=dQw4w9WgXcQ).
+For a real demonstration of how the project works, watch the video at this [link](https://www.youtube.com/watch?v=vYOW8ARHUHc).
 
 To access more detailed technical documentation, please follow this [link](https://drive.google.com/file/d/1U-4NNh6PsUmvGDHcrbZJpTy9ABmsuzRb/view?usp=sharing).
 
