@@ -99,7 +99,7 @@ frontend/
 
 - Node.js & npm (for frontend)
 - Django & Python (for frontend)
-- ESP32 board
+- ESP32-S3 board
 
 ## 📄 Demonstration and Technical Documentation
 
