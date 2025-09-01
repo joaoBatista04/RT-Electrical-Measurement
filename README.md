@@ -26,9 +26,11 @@ The system was designed to be robust, low-cost, and adaptable, integrating IoT, 
 - Wooden enclosure with power extension for user connection.
 
 ⚙️ **Circuit Schematic**  
+
 ![Circuit](images/schematic.png)
 
-📷 **Hardware Assembly**  
+📷 **Hardware Assembly**
+
 <img src="images/box.jpg" alt="Enclosure" width="540"/>
 
 ### 💻 Embedded Software (ESP32-S3 + FreeRTOS)
@@ -63,6 +65,7 @@ backend/
   - Automatic classification of loads (**resistive, inductive, capacitive**).
 
 📷 **Front-End Dashboard**  
+
 ![Dashboard](images/frontend.jpg)
 
 ```bash
