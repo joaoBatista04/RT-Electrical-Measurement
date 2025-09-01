@@ -29,7 +29,7 @@ The system was designed to be robust, low-cost, and adaptable, integrating IoT, 
 ![Circuit](images/schematic.png)
 
 📷 **Hardware Assembly**  
-![Enclosure](images/box.jpg)
+<img src="images/box.jpg" alt="Enclosure" width="540"/>
 
 ### 💻 Embedded Software (ESP32-S3 + FreeRTOS)
 - Simultaneous acquisition of voltage and current.
